@@ -19,5 +19,11 @@ return new class extends Migration
 
             $table->index('remaining');
         });
+
+        DB::statement("
+            ALTER TABLE slots
+            ADD CONSTRAINT slots_remaining_lte_capacity_chk
+            CHECK (remaining <= capacity)
+        ");
     }
 };

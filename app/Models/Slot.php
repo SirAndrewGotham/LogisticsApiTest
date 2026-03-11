@@ -67,24 +67,24 @@ class Slot extends Model
     /**
      * Decrement remaining capacity atomically.
      *
-     * @return bool
+     * @return bool True if a row was affected, false otherwise.
      */
     public function decrementRemaining(): bool
     {
-        return $this->where('id', $this->id)
-            ->where('remaining', '>', 0) // Prevents negative
-            ->decrement('remaining');
+        return (bool) $this->where('id', $this->id)
+            ->where('remaining', '>', 0)
+            ->decrement('remaining') > 0;
     }
 
     /**
      * Increment remaining capacity atomically.
      *
-     * @return bool
+     * @return bool True if a row was affected, false otherwise.
      */
     public function incrementRemaining(): bool
     {
-        return $this->where('id', $this->id)
-            ->where('remaining', '<', $this->capacity) // Prevents over-capacity
-            ->increment('remaining');
+        return (bool) $this->where('id', $this->id)
+            ->where('remaining', '<', $this->capacity)
+            ->increment('remaining') > 0;
     }
 }

@@ -18,13 +18,12 @@ return new class extends Migration
             $table->enum('status', ['held', 'confirmed', 'cancelled', 'expired'])
                 ->default('held');
             $table->string('idempotency_key', 64)->unique();
-            $table->timestamp('expires_at');
+            $table->timestamp('expires_at')->nullable(false);
             $table->timestamps();
 
             // Composite index for frequent queries
             $table->index(['slot_id', 'status']);
             $table->index(['expires_at']);
-            $table->index(['idempotency_key']);
         });
     }
 

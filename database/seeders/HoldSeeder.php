@@ -6,6 +6,7 @@ use App\Models\Hold;
 use App\Models\Slot;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -19,13 +20,12 @@ class HoldSeeder extends Seeder
         // Clear existing holds
         Hold::query()->delete();
 
-        // Get available slots
-        $slot1 = Slot::find(1); // Slot with 10 capacity, 10 remaining
-        $slot3 = Slot::find(3); // Slot with 8 capacity, 3 remaining
+        // Get available slots - find by deterministic attributes instead of hard-coded IDs
+        $slot1 = Slot::where('capacity', 10)->where('remaining', 10)->first();
+        $slot3 = Slot::where('capacity', 8)->where('remaining', 3)->first();
 
         if (!$slot1 || !$slot3) {
-            $this->command->error('Required slots not found. Run SlotSeeder first.');
-            return;
+            throw new \RuntimeException('Required slots not found. Please run SlotSeeder first to create slots with capacity 10/remaining 10 and capacity 8/remaining 3.');
         }
 
         $holds = [
@@ -73,17 +73,26 @@ class HoldSeeder extends Seeder
             ],
         ];
 
-        foreach ($holds as $holdData) {
-            Hold::create($holdData);
+        DB::transaction(function () use ($holds) {
+            foreach ($holds as $holdData) {
+                $expiresAt = Carbon::parse($holdData['expires_at']);
+                $isActive = in_array($holdData['status'], ['held', 'confirmed']) && $expiresAt->isFuture();
 
-            // Update slot remaining counts for active/confirmed holds
-            if (in_array($holdData['status'], ['held', 'confirmed'])) {
-                $slot = Slot::find($holdData['slot_id']);
-                if ($slot && $slot->remaining > 0) {
-                    $slot->decrement('remaining');
+                $slot = Slot::lockForUpdate()->find($holdData['slot_id']); // Lock the row!
+
+                if (!$slot) {
+                    throw new \RuntimeException("Slot ID {$holdData['slot_id']} not found");
                 }
+
+                if ($isActive) {
+                    if (!$slot->decrementRemaining()) {
+                        throw new \RuntimeException("Cannot create active hold: Slot {$slot->id} has no remaining capacity");
+                    }
+                }
+
+                Hold::create($holdData);
             }
-        }
+        });
 
         $this->command->info('✅ Holds seeded successfully!');
 

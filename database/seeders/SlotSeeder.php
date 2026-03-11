@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Hold;
 use App\Models\Slot;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -13,8 +14,9 @@ class SlotSeeder extends Seeder
      */
     public function run(): void
     {
-        // Clear existing slots (optional, but good for testing)
-        Slot::query()->delete();
+        // Clear existing records in correct order (respect foreign keys)
+        Hold::query()->delete(); // Delete holds first
+        Slot::query()->delete(); // Then delete slots
 
         // Create sample slots with different scenarios
         $slots = [

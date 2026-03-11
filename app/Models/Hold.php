@@ -69,25 +69,49 @@ class Hold extends Model
 
     /**
      * Mark hold as confirmed.
+     * Only allowed when status is 'held'.
      */
     public function markAsConfirmed(): bool
     {
-        return $this->update(['status' => 'confirmed']);
+        if ($this->status !== 'held' || $this->isExpired())
+        {
+            return false;
+        }
+
+        return (bool) static::where('id', $this->id)
+            ->where('status', 'held')
+            ->update(['status' => 'confirmed']);
     }
 
     /**
      * Mark hold as cancelled.
+     * Only allowed when status is 'held'.
      */
     public function markAsCancelled(): bool
     {
-        return $this->update(['status' => 'cancelled']);
+        if ($this->status !== 'held')
+        {
+            return false;
+        }
+
+        return (bool) static::where('id', $this->id)
+            ->where('status', 'held')
+            ->update(['status' => 'cancelled']);
     }
 
     /**
      * Mark hold as expired.
+     * Only allowed when status is 'held'.
      */
     public function markAsExpired(): bool
     {
-        return $this->update(['status' => 'expired']);
+        if ($this->status !== 'held' || ! $this->isExpired())
+        {
+            return false;
+        }
+
+        return (bool) static::where('id', $this->id)
+            ->where('status', 'held')
+            ->update(['status' => 'expired']);
     }
 }
