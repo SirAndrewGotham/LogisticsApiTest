@@ -1,4 +1,4 @@
-# Slot Booking API
+# Slot Booking API (Test Assignment)
 
 A robust Laravel 12 API service for managing time slot bookings with capacity constraints, temporary holds, and idempotent operations. Designed for high-concurrency scenarios.
 
