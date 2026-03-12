@@ -1,12 +1,13 @@
 <?php
 
+/**
+ * Web Routes
+ *
+ * Note: This application is API-only. Web routes are disabled in
+ * bootstrap/app.php configuration. This file is maintained for
+ * Laravel structure compatibility.
+ */
+
 use Illuminate\Support\Facades\Route;
 
-// Any web-specific routes can go here, I would probably put API documentation here
-Route::get('/', function () {
-    return response()->json([
-        'name' => 'Slot Booking API',
-        'version' => '1.0',
-        'code_repo' => 'https://github.com/SirAndrewGotham/LogisticsApiTest'
-    ]);
-});
+// No web routes are defined as this is an API-only application

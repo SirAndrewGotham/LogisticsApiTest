@@ -25,16 +25,17 @@ class IdempotencyMiddleware
             return $next($request);
         }
 
-        // Get idempotency key from header
+        // Get idempotency key from header - REQUIRED
         $idempotencyKey = $request->header('Idempotency-Key');
 
-        // Generate key if not provided
+        // If no key, return 400 error - CLIENT MUST PROVIDE IT
         if (!$idempotencyKey) {
-            $idempotencyKey = Str::uuid()->toString();
-            $request->headers->set('Idempotency-Key', $idempotencyKey);
+            return response()->json([
+                'error' => 'Idempotency-Key header is required for write operations.',
+            ], 400);
         }
 
-        // Validate UUID format
+        // Validate UUID format - MUST BE VALID UUID
         if (!Str::isUuid($idempotencyKey)) {
             return response()->json([
                 'error' => 'Invalid Idempotency-Key format. Must be a valid UUID v4.',
@@ -66,15 +67,11 @@ class IdempotencyMiddleware
 
     /**
      * Generate a unique cache key for the request.
+     * Simple key: idempotency.{uuid}
      */
     private function generateCacheKey(Request $request, string $idempotencyKey): string
     {
-        $method = $request->method();
-        $path = $request->path();
-        $userId = $request->user()?->id ?: 'guest';
-
-        return self::IDEMPOTENCY_CACHE_PREFIX .
-            md5("{$method}:{$path}:{$idempotencyKey}:{$userId}");
+        return self::IDEMPOTENCY_CACHE_PREFIX . $idempotencyKey;
     }
 
     /**
@@ -105,10 +102,9 @@ class IdempotencyMiddleware
         // Only cache successful responses (2xx)
         if ($response->isSuccessful()) {
             $this->cacheResponse($cacheKey, $response);
+            // Add header to indicate this response was cached
+            $response->headers->set('X-Idempotent-Processed', 'true');
         }
-
-        // Add header to indicate this is a new response
-        $response->headers->set('X-Idempotent-Processed', 'true');
 
         return $response;
     }

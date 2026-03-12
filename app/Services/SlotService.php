@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Exceptions\SlotCapacityException;
+use App\Exceptions\HoldNotConfirmableException;
+use App\Exceptions\HoldExpiredException;
 use App\Models\Slot;
 use App\Models\Hold;
 use Illuminate\Support\Facades\Cache;
@@ -15,7 +17,7 @@ class SlotService
     private const CACHE_TTL_SECONDS_MIN = 5;
     private const CACHE_TTL_SECONDS_MAX = 15;
     private const HOLD_EXPIRY_MINUTES = 5;
-    private const IDEMPOTENCY_CACHE_PREFIX = 'idempotency.';
+    private const string IDEMPOTENCY_CACHE_PREFIX = 'idempotency.'; // FIXED: Must match middleware
     private const IDEMPOTENCY_TTL_HOURS = 24;
 
     /**
@@ -26,26 +28,29 @@ class SlotService
         // Random TTL between 5-15 seconds as specified
         $ttl = rand(self::CACHE_TTL_SECONDS_MIN, self::CACHE_TTL_SECONDS_MAX);
 
-        return Cache::remember(
-            self::AVAILABILITY_CACHE_KEY,
-            $ttl,
-            function () {
-                // Cache stampede protection: lock while calculating
-                $lock = Cache::lock(self::AVAILABILITY_CACHE_KEY . '.lock', 3);
+        $cacheKey = self::AVAILABILITY_CACHE_KEY;
 
-                try {
-                    if ($lock->get()) {
-                        return $this->calculateAvailability();
-                    }
+        // Try to get from cache first (fast path)
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
+        }
 
-                    // If can't get lock, wait and retry once
-                    usleep(100000); // 100ms
-                    return Cache::get(self::AVAILABILITY_CACHE_KEY) ?? $this->calculateAvailability();
-                } finally {
-                    optional($lock)->release();
+        // Use atomic lock to prevent cache stampede
+        $result = Cache::lock($cacheKey . '.lock', 3)
+            ->block(1, function () use ($cacheKey, $ttl) {
+                // Double-check cache inside the lock
+                if ($cached = Cache::get($cacheKey)) {
+                    return $cached;
                 }
-            }
-        );
+
+                // We hold the lock, so we're responsible for calculating
+                $result = $this->calculateAvailability();
+                Cache::put($cacheKey, $result, $ttl);
+
+                return $result;
+            });
+
+        return $result ?? [];
     }
 
     /**
@@ -70,16 +75,9 @@ class SlotService
     /**
      * Create a hold with idempotency and capacity checks
      */
-    public function createHold(int $slotId, ?string $idempotencyKey): Hold
+    public function createHold(int $slotId, string $idempotencyKey): Hold
     {
-        // Note: UUID format validation is done in middleware
-        // But we still need to ensure a key is provided
-        if (!$idempotencyKey) {
-            throw new \InvalidArgumentException('Idempotency-Key header is required');
-        }
-
-        // Optional: Validate it's a UUID (redundant but safe)
-        // Middleware already did this, but good for service-level integrity
+        // Note: Middleware already validated the key, but double-check for safety
         if (!Str::isUuid($idempotencyKey)) {
             throw new \InvalidArgumentException('Valid Idempotency-Key header (UUID) is required');
         }
@@ -96,7 +94,7 @@ class SlotService
 
             // Check capacity
             if ($slot->remaining <= 0) {
-                throw new SlotCapacityException();
+                throw new SlotCapacityException('No capacity available in this slot', $slotId);
             }
 
             // Check for existing active holds with same idempotency key
@@ -118,10 +116,7 @@ class SlotService
             ]);
 
             // Atomically decrement remaining capacity
-            $decremented = $slot->decrementRemaining();
-
-            if (!$decremented) {
-                // This should rarely happen due to lock, but handle it
+            if (!$slot->decrementRemaining()) {
                 throw new \RuntimeException('Failed to decrement slot capacity');
             }
 
@@ -131,7 +126,7 @@ class SlotService
             // Invalidate availability cache
             $this->invalidateAvailabilityCache();
 
-            return $hold->fresh(); // Return fresh instance with updated relations
+            return $hold->fresh();
         });
     }
 
@@ -148,19 +143,19 @@ class SlotService
 
             // Validate hold state
             if ($hold->status !== 'held') {
-                abort(409, 'Hold is not in a confirmable state');
+                throw new HoldNotConfirmableException('Hold is not in a confirmable state');
             }
 
             if ($hold->isExpired()) {
-                $hold->markAsExpired();
-                abort(409, 'Hold has expired');
+                // Mark as expired outside transaction to persist
+                DB::afterCommit(function () use ($hold) {
+                    $hold->markAsExpired();
+                });
+                throw new HoldExpiredException('Hold has expired');
             }
 
             // Confirm the hold
             $hold->markAsConfirmed();
-
-            // Note: Capacity was already decremented when hold was created
-            // No need to decrement again, just ensure it's not negative
 
             // Invalidate cache
             $this->invalidateAvailabilityCache();
@@ -180,7 +175,7 @@ class SlotService
 
             // Only allow cancelling held holds
             if ($hold->status !== 'held') {
-                abort(409, 'Only held holds can be cancelled');
+                throw new HoldNotConfirmableException('Only held holds can be cancelled');
             }
 
             // Mark as cancelled
@@ -188,7 +183,9 @@ class SlotService
 
             // Return capacity if hold hasn't expired
             if (!$hold->isExpired()) {
-                $hold->slot->incrementRemaining();
+                if (!$hold->slot->incrementRemaining()) {
+                    throw new \RuntimeException('Failed to increment slot capacity');
+                }
             }
 
             // Invalidate cache
@@ -202,8 +199,6 @@ class SlotService
     public function invalidateAvailabilityCache(): void
     {
         Cache::forget(self::AVAILABILITY_CACHE_KEY);
-
-        // Also clear any lock that might exist
         Cache::lock(self::AVAILABILITY_CACHE_KEY . '.lock')->forceRelease();
     }
 
@@ -233,12 +228,15 @@ class SlotService
     public function cleanupExpiredHolds(): int
     {
         return DB::transaction(function () {
+            // Make sure Hold model has scopeExpired() method
             $expiredHolds = Hold::expired()->lockForUpdate()->get();
             $count = 0;
 
             foreach ($expiredHolds as $hold) {
                 $hold->markAsExpired();
-                $hold->slot->incrementRemaining();
+                if (!$hold->slot->incrementRemaining()) {
+                    throw new \RuntimeException("Failed to increment capacity for slot {$hold->slot_id}");
+                }
                 $count++;
             }
 

@@ -25,4 +25,9 @@ return new class extends Migration
             $table->index(['expires_at']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('holds');
+    }
 };

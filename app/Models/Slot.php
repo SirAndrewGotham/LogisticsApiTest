@@ -83,7 +83,7 @@ class Slot extends Model
     public function incrementRemaining(): bool
     {
         if ($this->remaining >= $this->capacity) {
-            return false;
+            throw new \RuntimeException("Cannot increment remaining beyond capacity for slot {$this->id}");
         }
 
         $this->remaining++;

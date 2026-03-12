@@ -24,13 +24,19 @@ class Hold extends Model
     ];
 
     /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
-    protected $casts = [
-        'expires_at' => 'datetime',
-    ];
+    + * Get the attributes that should be cast.
+    + *
+    + *
+    `@return
+    `
+    array<string, string>
+    + */
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get the slot that owns the hold.
@@ -58,5 +64,11 @@ class Hold extends Model
     public function markAsExpired(): void
     {
         $this->update(['status' => 'expired']);
+    }
+
+    public function scopeExpired($query)
+    {
+        return $query->where('expires_at', '<', now())
+            ->where('status', 'held');
     }
 }
