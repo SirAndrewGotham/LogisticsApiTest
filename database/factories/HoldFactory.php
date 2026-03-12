@@ -15,7 +15,6 @@ class HoldFactory extends Factory
     {
         return [
             'slot_id' => \App\Models\Slot::factory(),
-            'user_id' => $this->faker->numberBetween(1000, 9999),
             'status' => 'held',
             'idempotency_key' => Str::uuid()->toString(),
             'expires_at' => now()->addMinutes(5),

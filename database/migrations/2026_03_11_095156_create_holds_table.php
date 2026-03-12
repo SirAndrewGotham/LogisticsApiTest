@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('holds', function (Blueprint $table) {
             $table->id();
             $table->foreignId('slot_id')->constrained()->onDelete('cascade');
-            $table->unsignedBigInteger('user_id'); // I do not have users, adjust type if you have users table
             $table->enum('status', ['held', 'confirmed', 'cancelled', 'expired'])
                 ->default('held');
             $table->string('idempotency_key', 64)->unique();
@@ -25,13 +24,5 @@ return new class extends Migration
             $table->index(['slot_id', 'status']);
             $table->index(['expires_at']);
         });
-    }
-
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
-    {
-        Schema::dropIfExists('holds');
     }
 };
