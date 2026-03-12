@@ -13,7 +13,15 @@ use Carbon\Carbon;
 class HoldSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Seed initial Hold records, adjust related Slot remaining capacities, and display summary tables.
+     *
+     * Seeds a predefined set of holds (active, confirmed, cancelled, and expired), decrements slot
+     * remaining capacity for active holds within a transaction, and prints a table of created holds
+     * and updated slot statuses to the console.
+     *
+     * @throws \RuntimeException If the required seed slots are not found (instructing to run SlotSeeder first).
+     * @throws \RuntimeException If a referenced Slot is missing during hold creation.
+     * @throws \RuntimeException If creating an active hold would exceed a Slot's remaining capacity.
      */
     public function run(): void
     {
@@ -32,14 +40,12 @@ class HoldSeeder extends Seeder
             // Active holds (not expired)
             [
                 'slot_id' => $slot1->id,
-                'user_id' => 1001,
                 'status' => 'held',
                 'idempotency_key' => Str::uuid()->toString(),
                 'expires_at' => now()->addMinutes(10),
             ],
             [
                 'slot_id' => $slot1->id,
-                'user_id' => 1002,
                 'status' => 'held',
                 'idempotency_key' => Str::uuid()->toString(),
                 'expires_at' => now()->addMinutes(15),
@@ -48,7 +54,6 @@ class HoldSeeder extends Seeder
             // Confirmed hold
             [
                 'slot_id' => $slot3->id,
-                'user_id' => 1003,
                 'status' => 'confirmed',
                 'idempotency_key' => Str::uuid()->toString(),
                 'expires_at' => now()->addMinutes(30),
@@ -57,7 +62,6 @@ class HoldSeeder extends Seeder
             // Cancelled hold (for history)
             [
                 'slot_id' => $slot3->id,
-                'user_id' => 1004,
                 'status' => 'cancelled',
                 'idempotency_key' => Str::uuid()->toString(),
                 'expires_at' => now()->subMinutes(5),
@@ -66,7 +70,6 @@ class HoldSeeder extends Seeder
             // Expired hold (should be cleaned up)
             [
                 'slot_id' => $slot1->id,
-                'user_id' => 1005,
                 'status' => 'held',
                 'idempotency_key' => Str::uuid()->toString(),
                 'expires_at' => now()->subMinutes(1),
@@ -98,7 +101,7 @@ class HoldSeeder extends Seeder
 
         // Display summary - FIXED: Handle string dates safely
         $this->command->table(
-            ['ID', 'Slot ID', 'User ID', 'Status', 'Expires At', 'Age'],
+            ['ID', 'Slot ID', 'Status', 'Expires At', 'Age'],
             Hold::all()->map(function ($hold) {
                 // Convert expires_at to Carbon if it's a string
                 $expiresAt = $hold->expires_at instanceof Carbon
@@ -108,7 +111,6 @@ class HoldSeeder extends Seeder
                 return [
                     $hold->id,
                     $hold->slot_id,
-                    $hold->user_id,
                     $hold->status,
                     $expiresAt->format('H:i:s'),
                     $expiresAt->diffForHumans(),

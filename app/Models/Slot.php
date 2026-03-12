@@ -12,18 +12,23 @@ class Slot extends Model
     use HasFactory;
 
     /**
-     * The "booted" method of the model.
+     * Register a model saving hook that ensures the slot's `remaining` is between 0 and `capacity`.
+     *
+     * Throws an InvalidArgumentException when `remaining` is less than 0 or greater than `capacity`.
+     *
+     * @return void
      */
     protected static function booted(): void
     {
         static::saving(function (Slot $slot) {
-            // Application-level check constraint
+            // Enforce remaining >= 0
             if ($slot->remaining < 0) {
-                throw new \RuntimeException('Remaining cannot be negative');
+                throw new \InvalidArgumentException('Remaining cannot be less than 0');
             }
 
+            // Enforce remaining <= capacity
             if ($slot->remaining > $slot->capacity) {
-                throw new \RuntimeException('Remaining cannot exceed capacity');
+                throw new \InvalidArgumentException('Remaining cannot exceed capacity');
             }
         });
     }
@@ -65,26 +70,33 @@ class Slot extends Model
     }
 
     /**
-     * Decrement remaining capacity atomically.
+     * Decreases the slot's remaining count by one and persists the change if remaining is greater than zero.
      *
-     * @return bool True if a row was affected, false otherwise.
+     * @return bool `true` if the remaining value was decreased and the model saved successfully, `false` otherwise.
      */
     public function decrementRemaining(): bool
     {
-        return (bool) $this->where('id', $this->id)
-            ->where('remaining', '>', 0)
-            ->decrement('remaining') > 0;
+        if ($this->remaining <= 0) {
+            return false;
+        }
+
+        $this->remaining--;
+        return $this->save();
     }
 
     /**
-     * Increment remaining capacity atomically.
+     * Increases the slot's remaining count by one if it is less than capacity and persists the change.
      *
-     * @return bool True if a row was affected, false otherwise.
+     * @return bool `true` if remaining was increased and persisted, `false` otherwise.
      */
     public function incrementRemaining(): bool
     {
-        return (bool) $this->where('id', $this->id)
-            ->where('remaining', '<', $this->capacity)
-            ->increment('remaining') > 0;
+        if ($this->remaining >= $this->capacity) {
+            return false;
+        }
+
+        $this->remaining++;
+        return $this->save();
     }
+
 }

@@ -18,7 +18,6 @@ class Hold extends Model
      */
     protected $fillable = [
         'slot_id',
-        'user_id',
         'status',
         'idempotency_key',
         'expires_at',
@@ -42,76 +41,38 @@ class Hold extends Model
     }
 
     /**
-     * Scope a query to only include active holds.
-     */
-    public function scopeActive($query)
-    {
-        $query->where('status', 'held')
-            ->where('expires_at', '>', now());
-    }
-
-    /**
-     * Scope a query to only include expired holds.
-     */
-    public function scopeExpired($query)
-    {
-        $query->where('status', 'held')
-            ->where('expires_at', '<=', now());
-    }
-
-    /**
-     * Check if the hold is expired.
+     * Determine whether the hold's expiration time is in the past.
+     *
+     * @return bool `true` if the hold's `expires_at` is before now, `false` otherwise.
      */
     public function isExpired(): bool
     {
-        return $this->status === 'held' && $this->expires_at <= now();
+        return $this->expires_at->isPast();
     }
 
     /**
-     * Mark hold as confirmed.
-     * Only allowed when status is 'held'.
+     * Set the hold's status to 'confirmed' and persist the change to the database.
      */
-    public function markAsConfirmed(): bool
+    public function markAsConfirmed(): void
     {
-        if ($this->status !== 'held' || $this->isExpired())
-        {
-            return false;
-        }
-
-        return (bool) static::where('id', $this->id)
-            ->where('status', 'held')
-            ->update(['status' => 'confirmed']);
+        $this->update(['status' => 'confirmed']);
     }
 
     /**
-     * Mark hold as cancelled.
-     * Only allowed when status is 'held'.
+     * Mark the hold's status as cancelled.
+     *
+     * Sets the model's `status` attribute to `'cancelled'` and persists the change.
      */
-    public function markAsCancelled(): bool
+    public function markAsCancelled(): void
     {
-        if ($this->status !== 'held')
-        {
-            return false;
-        }
-
-        return (bool) static::where('id', $this->id)
-            ->where('status', 'held')
-            ->update(['status' => 'cancelled']);
+        $this->update(['status' => 'cancelled']);
     }
 
     /**
-     * Mark hold as expired.
-     * Only allowed when status is 'held'.
+     * Mark the hold as expired and persist the status change to storage.
      */
-    public function markAsExpired(): bool
+    public function markAsExpired(): void
     {
-        if ($this->status !== 'held' || ! $this->isExpired())
-        {
-            return false;
-        }
-
-        return (bool) static::where('id', $this->id)
-            ->where('status', 'held')
-            ->update(['status' => 'expired']);
+        $this->update(['status' => 'expired']);
     }
 }

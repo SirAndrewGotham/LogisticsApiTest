@@ -11,11 +11,21 @@ use Illuminate\Support\Str;
  */
 class HoldFactory extends Factory
 {
+    /**
+     * Define the default attributes for a Hold model factory.
+     *
+     * The returned array includes:
+     * - 'slot_id': a Slot model instance created by the Slot factory.
+     * - 'status': the string 'held'.
+     * - 'idempotency_key': a UUID string used for idempotency.
+     * - 'expires_at': a timestamp set five minutes from now.
+     *
+     * @return array The default attributes for creating a Hold.
+     */
     public function definition(): array
     {
         return [
             'slot_id' => \App\Models\Slot::factory(),
-            'user_id' => $this->faker->numberBetween(1000, 9999),
             'status' => 'held',
             'idempotency_key' => Str::uuid()->toString(),
             'expires_at' => now()->addMinutes(5),
