@@ -17,13 +17,14 @@ class Slot extends Model
     protected static function booted(): void
     {
         static::saving(function (Slot $slot) {
-            // Application-level check constraint
+            // Enforce remaining >= 0
             if ($slot->remaining < 0) {
-                throw new \RuntimeException('Remaining cannot be negative');
+                throw new \InvalidArgumentException('Remaining cannot be less than 0');
             }
 
+            // Enforce remaining <= capacity
             if ($slot->remaining > $slot->capacity) {
-                throw new \RuntimeException('Remaining cannot exceed capacity');
+                throw new \InvalidArgumentException('Remaining cannot exceed capacity');
             }
         });
     }
@@ -71,20 +72,22 @@ class Slot extends Model
      */
     public function decrementRemaining(): bool
     {
-        return (bool) $this->where('id', $this->id)
-            ->where('remaining', '>', 0)
-            ->decrement('remaining') > 0;
+        if ($this->remaining <= 0) {
+            return false;
+        }
+
+        $this->remaining--;
+        return $this->save();
     }
 
-    /**
-     * Increment remaining capacity atomically.
-     *
-     * @return bool True if a row was affected, false otherwise.
-     */
     public function incrementRemaining(): bool
     {
-        return (bool) $this->where('id', $this->id)
-            ->where('remaining', '<', $this->capacity)
-            ->increment('remaining') > 0;
+        if ($this->remaining >= $this->capacity) {
+            return false;
+        }
+
+        $this->remaining++;
+        return $this->save();
     }
+
 }
