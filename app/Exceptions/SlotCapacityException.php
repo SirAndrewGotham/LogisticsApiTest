@@ -2,12 +2,20 @@
 
 namespace App\Exceptions;
 
-use Symfony\Component\HttpKernel\Exception\HttpException;
+use Exception;
 
-class SlotCapacityException extends HttpException
+class SlotCapacityException extends Exception
 {
-    public function __construct(string $message = 'No capacity available', \Throwable $previous = null, array $headers = [])
+    private ?int $slotId;
+
+    public function __construct(string $message = 'No capacity available in this slot', int $slotId = null)
     {
-        parent::__construct(409, $message, $previous, $headers);
+        parent::__construct($message);
+        $this->slotId = $slotId;
+    }
+
+    public function getSlotId(): ?int
+    {
+        return $this->slotId;
     }
 }

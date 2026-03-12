@@ -25,24 +25,19 @@ readonly class SlotController
      */
     public function hold(HoldSlotRequest $request, $slot): JsonResponse
     {
-        // Request is already validated by HoldSlotRequest
-        $validated = $request->validated();
+        // Middleware already validated Idempotency-Key header
+        $idempotencyKey = $request->header('Idempotency-Key');
 
         try {
-            $hold = $this->slotService->createHold(
-                $slot, // Use the route parameter directly
-                $request->header('Idempotency-Key')
-            );
-
+            $hold = $this->slotService->createHold($slot, $idempotencyKey);
             return response()->json($hold, 201);
-
         } catch (SlotCapacityException $e) {
             return response()->json([
                 'error' => $e->getMessage(),
-                'slot_id' => $slot, // Use the route parameter
+                'slot_id' => $slot,
                 'remaining' => 0,
             ], 409);
         }
-        // Note: InvalidArgumentException is caught by middleware
+        // InvalidArgumentException from service should not happen since middleware validated
     }
 }

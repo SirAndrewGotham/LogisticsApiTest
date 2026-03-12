@@ -31,4 +31,13 @@ return new class extends Migration
         // SQLite doesn't support adding CHECK constraints via ALTER TABLE
         // So we enforce it at application level
     }
+
+    /**
+    * Reverse the migrations.
+    */
+    public function down(): void
+    {
+        Schema::dropIfExists('slots');
+        // Note: Dropping the table will automatically remove any CHECK constraints
+    }
 };

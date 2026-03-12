@@ -2,21 +2,22 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Resources\SlotCollection;
 use App\Models\Slot;
-use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
-class AvailabilityController extends Controller
+class AvailabilityController
 {
     /**
-     * Handle the incoming request.
+     * Get available slots
      */
-    public function __invoke(Request $request)
+    public function __invoke(): SlotCollection
     {
-        return Slot::query()
+        $slots = Slot::query()
             ->select(['id', 'capacity', 'remaining'])
             ->orderBy('id')
-            ->get()
-            ->toArray();
+            ->get();
+
+        return new SlotCollection($slots);
     }
 }
